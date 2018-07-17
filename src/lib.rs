@@ -24,23 +24,17 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-const MAX_NAME_LENGTH: usize = 10;
 const MAX_CODEC_SYMBOL_SIZE: usize = 4;
 
 struct MessageCodec<T> {
-    name: Vec<u8>,
+    name: String,
     phantom: PhantomData<T>,
 }
 
 impl<T> MessageCodec<T> {
     pub fn new(name: &str) -> MessageCodec<T> {
         let name_string = name.to_string();
-        assert!(name_string.len() <= MAX_NAME_LENGTH); //TODO process invalid string
-        let mut temp = name_string.into_bytes();
-        for _ in 0..(MAX_NAME_LENGTH - temp.len()) {
-            temp.push(0);
-        }
-        MessageCodec { name: temp, phantom: PhantomData }
+        MessageCodec { name: name_string, phantom: PhantomData }
     }
 }
 
@@ -73,13 +67,21 @@ fn four_vecu8_to_number(vec: Vec<u8>) -> u64 {
 }
 
 impl<T> Encoder for MessageCodec<T> where T: serde::Serialize {
-    type Item = T;
+    type Item = Option<T>;
     type Error = io::Error;
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        assert_eq!(self.name.len(), MAX_NAME_LENGTH);
-        let mut data = self.name.clone();
-        let mut temp = serialize(&item).unwrap();
-        data.append(&mut temp);
+        let mut data: Vec<u8> = vec![];
+        match item {
+            None => {
+                data.push(0 as u8);
+                let mut name = self.name.clone().into_bytes();
+                data.append(&mut name);
+            }
+            Some(v) => {
+                data.push(1 as u8);
+                data.append(&mut serialize(&v).unwrap());
+            }
+        }
         let mut encoder: Vec<u8> = number_to_four_vecu8(data.len() as u64);
         encoder.append(&mut data);
         dst.reserve(encoder.len());
@@ -89,7 +91,7 @@ impl<T> Encoder for MessageCodec<T> where T: serde::Serialize {
 }
 
 impl<T> Decoder for MessageCodec<T> where T: serde::de::DeserializeOwned {
-    type Item = (String, T);
+    type Item = (Option<String>, Option<T>);
     type Error = io::Error;
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if src.len() < MAX_CODEC_SYMBOL_SIZE {
@@ -99,10 +101,21 @@ impl<T> Decoder for MessageCodec<T> where T: serde::de::DeserializeOwned {
             let mut truth_data = vec.split_off(MAX_CODEC_SYMBOL_SIZE);
             let vec_length = four_vecu8_to_number(vec);
             if truth_data.len() == vec_length as usize {
-                let msg_data = truth_data.split_off(MAX_NAME_LENGTH);
-                let msg: T = deserialize(&msg_data).unwrap();
+                let msg_data = truth_data.split_off(1);
                 src.clear();
-                Ok(Some((String::from_utf8(truth_data).unwrap(), msg)))
+                match truth_data[0] {
+                    0 => {
+                        Ok(Some((Some(String::from_utf8(truth_data).unwrap()), None)))
+                    }
+                    1 => {
+                        let msg: T = deserialize(&msg_data).unwrap();
+                        Ok(Some((None, Some(msg))))
+                    }
+                    _ => {
+                        panic!("unexpected message");
+                    }
+                }
+                // Ok(Some((String::from_utf8(truth_data).unwrap(), msg)))
             } else {
                 Ok(None)
             }
@@ -112,7 +125,7 @@ impl<T> Decoder for MessageCodec<T> where T: serde::de::DeserializeOwned {
 
 pub struct MsgServer<T> {
     pub addr: SocketAddr,
-    connections: Arc<Mutex<HashMap<String, mpsc::Sender<T>>>>,
+    connections: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>,
 }
 
 impl<T> MsgServer<T>
@@ -131,9 +144,9 @@ impl<T> MsgServer<T>
         let listener = net::TcpListener::bind(&self.addr).unwrap();
         let done = listener.incoming().for_each(move |tcp_stream| {
             let connections = connections_outer.clone();
-            let (mut tx, rx): (mpsc::Sender<T>, mpsc::Receiver<T>) = mpsc::channel(0);
+            let (mut tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
             let rx = rx.map_err(|_| panic!());
-            let rx: Box<Stream<Item=T, Error=io::Error> + Send> = Box::new(rx);
+            let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx);
             let (sink, stream) = MessageCodec::new(name).framed(tcp_stream).split();
             let send_to_client = rx.forward(sink).then(|result| {
                 if let Err(e) = result {
@@ -142,21 +155,11 @@ impl<T> MsgServer<T>
                 Ok(())
             });
             tokio::spawn(send_to_client);
-            let receive_and_process = stream.for_each(move |(name, msg): (String, T)| {
-                let mut connections_inner = connections.clone();
-                if !connections_inner.lock().unwrap().contains_key(&name) {
-                    connections_inner.lock().unwrap().insert(name, tx.clone());
-                }
+            let receive_and_process = stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
                 // process
-                let dest_and_msg = process_function(msg);
-                for (dest, msg) in dest_and_msg {
-                    if connections_inner.lock().unwrap().contains_key(&dest){
-                        connections_inner.lock().unwrap().get_mut(&dest).unwrap().try_send(msg).unwrap();
-                    }
-                    else {
-                        panic!("client {} does not register for server",dest);
-                    }
-                }
+//                let dest_and_msg = process_function(msg);
+//                for (dest, msg) in dest_and_msg {
+                //}
 
                 Ok(())
             }).map_err(move |e| { println!("{} closed connection", name); });
