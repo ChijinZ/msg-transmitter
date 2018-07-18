@@ -115,7 +115,6 @@ impl<T> Decoder for MessageCodec<T> where T: serde::de::DeserializeOwned {
                         panic!("unexpected message");
                     }
                 }
-                // Ok(Some((String::from_utf8(truth_data).unwrap(), msg)))
             } else {
                 Ok(None)
             }
@@ -124,7 +123,7 @@ impl<T> Decoder for MessageCodec<T> where T: serde::de::DeserializeOwned {
 }
 
 pub struct MsgServer<T> {
-    pub addr: SocketAddr,
+    addr: SocketAddr,
     connections: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>,
 }
 
@@ -138,16 +137,16 @@ impl<T> MsgServer<T>
             connections: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-    pub fn start_server(&self, name: &'static str, process_function: fn(T) -> Vec<(String, T)>)
+    pub fn start_server(&self, server_name: &'static str, process_function: fn(T) -> Vec<(String, T)>)
     {
         let connections_outer = self.connections.clone();
-        let listener = net::TcpListener::bind(&self.addr).unwrap();
+        let listener = net::TcpListener::bind(&self.addr).expect("unable to bind TCP listener");
         let done = listener.incoming().for_each(move |tcp_stream| {
             let connections = connections_outer.clone();
-            let (mut tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
+            let (tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
             let rx = rx.map_err(|_| panic!());
             let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx);
-            let (sink, stream) = MessageCodec::new(name).framed(tcp_stream).split();
+            let (sink, stream) = MessageCodec::new(server_name).framed(tcp_stream).split();
             let send_to_client = rx.forward(sink).then(|result| {
                 if let Err(e) = result {
                     panic!("failed to write to socket: {}", e)
@@ -155,17 +154,90 @@ impl<T> MsgServer<T>
                 Ok(())
             });
             tokio::spawn(send_to_client);
-            let receive_and_process = stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
-                // process
-//                let dest_and_msg = process_function(msg);
-//                for (dest, msg) in dest_and_msg {
-                //}
 
+            let receive_and_process = stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
+                let connections_inner = connections.clone();
+                match name {
+                    Some(register_name) => {
+                        connections_inner.lock().unwrap().insert(register_name, tx.clone());
+                    }
+                    None => {
+                        let msg = msg.unwrap();
+                        let dest_and_msg = process_function(msg);
+                        for (dest, msg) in dest_and_msg {
+                            connections_inner.lock().unwrap().get_mut(&dest).unwrap().try_send(Some(msg)).unwrap();
+                        }
+                    }
+                }
                 Ok(())
-            }).map_err(move |e| { println!("{} closed connection", name); });
+            }).map_err(move |_| {
+                println!("closed connection"); //TODO remove the key and value of this socket from self.connections
+            });
 
             tokio::spawn(receive_and_process);
             Ok(())
+        }).map_err(|e| { println!("{:?}", e); });
+        tokio::run(done);
+    }
+}
+
+
+pub struct MsgClient<T> {
+    connect_addr: SocketAddr,
+    phantom: PhantomData<T>,
+}
+
+impl<T> MsgClient<T>
+    where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static
+{
+    pub fn new(addr: &str) -> MsgClient<T> {
+        let socket_addr = addr.parse::<SocketAddr>().unwrap();
+        MsgClient {
+            connect_addr: socket_addr,
+            phantom: PhantomData,
+        }
+    }
+
+    pub fn start_client(&self, client_name: &'static str, process_function: fn(T) -> Vec<T>) {
+        let tcp = net::TcpStream::connect(&self.connect_addr);
+        let done = tcp.map(move |mut tcp_stream| {
+            let mut message_codec: MessageCodec<T> = MessageCodec::new(client_name);
+            let register_msg = None;
+            let mut buf = BytesMut::new();
+            message_codec.encode(register_msg, &mut buf);
+            tcp_stream.write_all(&buf);
+
+
+            let (mut tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
+            let rx = rx.map_err(|_| panic!());
+            let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx);
+
+            let (sink, stream) = message_codec.framed(tcp_stream).split();
+
+            let send_to_server = rx.forward(sink).then(|result| {
+                if let Err(e) = result {
+                    panic!("failed to write to socket: {}", e)
+                }
+                Ok(())
+            });
+            tokio::spawn(send_to_server);
+
+            let receive_and_process = stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
+                match name {
+                    Some(register_name) => {
+                        panic!("client received unexpected message");
+                    }
+                    None => {
+                        let msg = msg.unwrap();
+                        let msgs = process_function(msg);
+                        for msg in msgs {
+                            tx.try_send(Some(msg)).unwrap();
+                        }
+                    }
+                }
+                Ok(())
+            }).map_err(move |_| { println!("server closed"); });
+            tokio::spawn(receive_and_process);
         }).map_err(|e| { println!("{:?}", e); });
         tokio::run(done);
     }

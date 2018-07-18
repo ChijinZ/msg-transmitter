@@ -3,6 +3,10 @@ name = "msg-transmitter"
 version = "0.1.0"
 authors = ["ChijinZ <tlock.chijin@gmail.com>"]
 
+[[example]]
+name = "simple_connection"
+path = "examples/simple_connection.rs"
+
 [dependencies]
 tokio = "0.1"
 bytes = "0.4"
