@@ -1,3 +1,5 @@
+//!
+
 //#![doc(html_root_url = "11")]
 //#![deny(missing_docs, warnings, missing_debug_implementations)]
 
@@ -5,8 +7,6 @@ extern crate tokio;
 extern crate futures;
 extern crate tokio_codec;
 extern crate serde;
-//#[macro_use]
-//extern crate serde_derive;
 extern crate bincode;
 extern crate bytes;
 
@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
+///
 const MAX_CODEC_SYMBOL_SIZE: usize = 4;
 
 struct MessageCodec<T> {
@@ -105,7 +106,7 @@ impl<T> Decoder for MessageCodec<T> where T: serde::de::DeserializeOwned {
                 src.clear();
                 match truth_data[0] {
                     0 => {
-                        Ok(Some((Some(String::from_utf8(truth_data).unwrap()), None)))
+                        Ok(Some((Some(String::from_utf8(msg_data).unwrap()), None)))
                     }
                     1 => {
                         let msg: T = deserialize(&msg_data).unwrap();
@@ -128,7 +129,7 @@ pub struct MsgServer<T> {
 }
 
 impl<T> MsgServer<T>
-    where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static
+    where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone
 {
     pub fn new(addr: &str) -> MsgServer<T> {
         let socket_addr = addr.parse::<SocketAddr>().unwrap();
@@ -137,11 +138,12 @@ impl<T> MsgServer<T>
             connections: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-    pub fn start_server(&self, server_name: &'static str, process_function: fn(T) -> Vec<(String, T)>)
+    pub fn start_server(&self, server_name: &'static str, first_msg: T, process_function: fn(T) -> Vec<(String, T)>)
     {
         let connections_outer = self.connections.clone();
         let listener = net::TcpListener::bind(&self.addr).expect("unable to bind TCP listener");
         let done = listener.incoming().for_each(move |tcp_stream| {
+            let first_msg_inner = first_msg.clone();
             let connections = connections_outer.clone();
             let (tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
             let rx = rx.map_err(|_| panic!());
@@ -159,19 +161,26 @@ impl<T> MsgServer<T>
                 let connections_inner = connections.clone();
                 match name {
                     Some(register_name) => {
-                        connections_inner.lock().unwrap().insert(register_name, tx.clone());
+                        let mut tx_inner = tx.clone();
+                        tx_inner.try_send(Some(first_msg_inner.clone())).unwrap();
+                        connections_inner.lock().unwrap().insert(register_name, tx_inner);
                     }
                     None => {
                         let msg = msg.unwrap();
                         let dest_and_msg = process_function(msg);
                         for (dest, msg) in dest_and_msg {
-                            connections_inner.lock().unwrap().get_mut(&dest).unwrap().try_send(Some(msg)).unwrap();
+                            if connections_inner.lock().unwrap().contains_key(&dest) {
+                                connections_inner.lock().unwrap().get_mut(&dest).unwrap().try_send(Some(msg)).unwrap();
+                            } else {
+                                panic!("{} doesn't register", dest);
+                            }
                         }
                     }
                 }
                 Ok(())
             }).map_err(move |_| {
-                println!("closed connection"); //TODO remove the key and value of this socket from self.connections
+                println!("closed connection");
+                //TODO remove the key and value of this socket from self.connections
             });
 
             tokio::spawn(receive_and_process);
@@ -188,7 +197,7 @@ pub struct MsgClient<T> {
 }
 
 impl<T> MsgClient<T>
-    where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static
+    where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone
 {
     pub fn new(addr: &str) -> MsgClient<T> {
         let socket_addr = addr.parse::<SocketAddr>().unwrap();
@@ -211,7 +220,6 @@ impl<T> MsgClient<T>
             let (mut tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
             let rx = rx.map_err(|_| panic!());
             let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx);
-
             let (sink, stream) = message_codec.framed(tcp_stream).split();
 
             let send_to_server = rx.forward(sink).then(|result| {
