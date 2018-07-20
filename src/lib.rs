@@ -25,7 +25,7 @@
 //! For client, when *start_client* is called, it will start connecting the target port and creating
 //! a socket, sending register information (a name presented by *String*), spawning two tokio-style
 //! tasks for each socket. Two tasks work with each other by the same way as server tasks do.
-//! For now, all our networking is based on TCP. All user data are transfered to bytes through a
+//! For now, all our networking is based on TCP. All user data are transferred to bytes through a
 //! simple protocol.
 //!
 //!    +++++++++++++++++++++++++++++++++++++++++++++++
