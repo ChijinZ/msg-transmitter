@@ -16,3 +16,4 @@ env:
     
 script:
   - cargo build
+  - cargo test
