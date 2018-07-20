@@ -1,19 +1,13 @@
 language: rust
 sudo: false
+cache: cargo
 
-# run builds for all the trains (and more)
 rust:
   - stable
   - beta
   - nightly
-  - 1.13.0
-  - 1.15.0
-  - 1.20.0
-  - 1.21.0
-  - 1.25.0
-  - 1.26.0
-  
-  os:
+ 
+os:
   - linux
   
 env:
