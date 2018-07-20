@@ -58,6 +58,6 @@ For now, all our networking is based on TCP. All user data are transfered to byt
      Data_size(4 bytes) | State(1 byte) |   Data
     +++++++++++++++++++++++++++++++++++++++++++++++
 
-Data_size is a 4-bytes head to represent the number of bytes of **state** and **Data**. So each stream can't transmit message which contains more than $2^{32}$ bytes data.
+Data_size is a 4-bytes head to represent the number of bytes of **state** and **Data**. So each stream can't transmit message which contains more than 2^32 bytes data.
 
 State represents the state of this stream, it just has two states for now. When state equals **0**, the data is register informaiton; when state equals **1**, the data is user's message.
