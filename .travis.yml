@@ -1,0 +1,18 @@
+language: rust
+sudo: false
+cache: cargo
+
+rust:
+  - stable
+  - beta
+  - nightly
+ 
+os:
+  - linux
+  
+env:
+  global:
+    - RUST_BACKTRACE=1
+    
+script:
+  - cargo build
