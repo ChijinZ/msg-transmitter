@@ -1,5 +1,5 @@
 # msg-transmitter
-
+[![Build Status](https://travis-ci.org/ChijinZ/msg-transmitter.svg?branch=master)](https://travis-ci.org/ChijinZ/msg-transmitter)
 ## Overview
 It is a library of single server multiple clients model. The main purpose of this library is helping users more focus on communication logic instead of low-level networking design. User can transmit any structs between server and client.
 
