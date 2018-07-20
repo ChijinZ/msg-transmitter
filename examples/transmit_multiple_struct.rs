@@ -1,3 +1,17 @@
+//! A example to show how to transmit multiple structs.
+//!
+//! If you want to transmit multiple structs, you should make your struct derive Serialize and
+//! Deserialize trait and wrap them in an enum.
+//!
+//! You can test this out by running:
+//!
+//!     cargo run --example transmit_multiple_struct server
+//!
+//! And then in another window run:
+//!
+//!     cargo run --example transmit_multiple_struct client
+//!
+
 extern crate msg_transmitter;
 #[macro_use]
 extern crate serde_derive;
@@ -9,20 +23,13 @@ use std::env;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 enum Message {
-    Pointmsg(Point),
     VecOfF32msg(VecOfF32),
     Endmsg(End),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct Point {
-    x: i32,
-    y: i32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
 struct VecOfF32 {
-    y: Vec<i32>,
+    vec: Vec<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -42,25 +49,19 @@ fn server() {
     fn process(msg: Message) -> Vec<(String, Message)> {
         println!("{:?}", msg);
         match msg {
-            Message::Pointmsg(point) => {
-                vec![("client".to_string(), Message::Pointmsg(point))]
-            }
             Message::VecOfF32msg(vec_of_32) => {
-                if vec_of_32.y.len() < 10 {
+                if vec_of_32.vec.len() < 10 {
                     vec![("client".to_string(), Message::VecOfF32msg(vec_of_32))]
                 } else {
                     vec![("client".to_string(), Message::Endmsg(End))]
                 }
             }
             Message::Endmsg(_) => {
-                vec![("client".to_string(), Message::Pointmsg(Point { x: 1, y: 1 }))]
-            }
-            _ => {
-                panic!("unexpected message")
+                std::process::exit(0)
             }
         }
     }
-    server.start_server("server", Message::Pointmsg(Point { x: 1, y: 1 }), process);
+    server.start_server("server", Message::VecOfF32msg(VecOfF32{vec:vec![]}), process);
 }
 
 fn client() {
@@ -68,17 +69,12 @@ fn client() {
     fn process(msg: Message) -> Vec<Message> {
         println!("{:?}", msg);
         match msg {
-            Message::Pointmsg(point) => {
-                vec![Message::VecOfF32msg(VecOfF32 { y: vec![point.y + point.x] })]
+            Message::VecOfF32msg(mut vec_of_32) => {
+                vec_of_32.vec.push(1);
+                vec![Message::VecOfF32msg(vec_of_32)]
             }
-            Message::VecOfF32msg(vec_of_32) => {
-                vec![Message::Pointmsg(Point { x: 1, y: 1 })]
-            }
-            Message::Endmsg(v) => {
+            Message::Endmsg(_) => {
                 std::process::exit(0)
-            }
-            _ => {
-                panic!("unexpected message")
             }
         }
     }

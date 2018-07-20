@@ -1,3 +1,17 @@
+//! A simple transmitting-u32 example between server and client.
+//!
+//! You can test this out by running:
+//!
+//!     cargo run --example simple_connection server
+//!
+//! And then in another window run:
+//!
+//!     cargo run --example simple_connection client
+//!
+//! If it works, client should receive even number and server should receive odd number until client
+//! receives 20.
+
+
 extern crate msg_transmitter;
 use msg_transmitter::{MsgServer,MsgClient};
 use std::env;
