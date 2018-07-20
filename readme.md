@@ -47,7 +47,7 @@ fn client() {
     client.start_client("client", process);
 }
 ```
-More examples can be found [here]().
+More examples can be found [here](https://github.com/ChijinZ/msg-transmitter/tree/master/examples).
 ## Design
 For server, when *start_server* is called, it will start binding and listening the target port and spawning two tokio-style tasks for each socket. One task for receiving message from socket and processing user's logic, another task for sending message to socket. After the first task processes user's logic, it will send message to another task through *mpsc::channel*.
 
