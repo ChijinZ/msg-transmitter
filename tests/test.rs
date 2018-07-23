@@ -8,3 +8,4 @@ fn test_vecu8_u64() {
         assert_eq!(i, four_vecu8_to_number(number_to_four_vecu8(i)));
     }
 }
+

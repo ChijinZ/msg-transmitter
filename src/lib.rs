@@ -74,13 +74,12 @@ struct MessageCodec<T> {
 }
 
 impl<T> MessageCodec<T> {
-    pub fn new(name: &str) -> MessageCodec<T> {
-        let name_string = name.to_string();
-        MessageCodec { name: name_string, phantom: PhantomData }
+    pub fn new(name: String) -> MessageCodec<T> {
+        MessageCodec { name: name, phantom: PhantomData }
     }
 }
 
-// A u64 to Vec<u8> function to convert decimal to hexadecimal.
+// A u64 to Vec<u8> function to convert decimal to 256 hexadecimal.
 pub fn number_to_four_vecu8(num: u64) -> Vec<u8> {
     assert!(num < (1 << 32));
     let mut result: Vec<u8> = vec![];
@@ -101,7 +100,7 @@ pub fn number_to_four_vecu8(num: u64) -> Vec<u8> {
     return result;
 }
 
-// A Vec<u8> to u64 function to convert hexadecimal to decimal.
+// A Vec<u8> to u64 function to convert 256 hexadecimal to decimal.
 pub fn four_vecu8_to_number(vec: Vec<u8>) -> u64 {
     assert_eq!(vec.len(), DATA_SIZE);
     let num = vec[0] as u64 * 256 * 256 * 256 + vec[1] as u64 * 256 * 256
@@ -174,35 +173,38 @@ pub struct MsgServer<T> {
     // addr is the socket address which server will bind and listen to.
     // connetions is used to map client's name to sender of channel.
     addr: SocketAddr,
+    name: String,
     connections: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>,
 }
 
 impl<T> MsgServer<T>
     where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone
 {
-    pub fn new(addr: &str) -> MsgServer<T> {
+    pub fn new(addr: &str, server_name: &'static str) -> MsgServer<T> {
         let socket_addr = addr.parse::<SocketAddr>().unwrap();
         MsgServer {
             addr: socket_addr,
+            name: String::from(server_name),
             connections: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-    pub fn start_server(&self, server_name: &'static str, first_msg: T,
+    pub fn start_server(&self, first_msg: T,
                         process_function: fn(T) -> Vec<(String, T)>)
     {
         let connections_outer = self.connections.clone();
         let listener = net::TcpListener::bind(&self.addr)
             .expect("unable to bind TCP listener");
+        let server_name = self.name.clone();
         let done = listener.incoming()
             .for_each(move |tcp_stream| {
+                let server_name = server_name.clone();
                 let first_msg_inner = first_msg.clone();
                 let connections = connections_outer.clone();
 
                 // Create a mpsc::channel in order to build a bridge between sender task and receiver
                 // task.
                 let (tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
-                let rx = rx.map_err(|_| panic!());
-                let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx);
+                let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx.map_err(|_| panic!()));
 
                 // Split tcp_stream to sink and stream. Sink responses to send messages to this
                 // client, stream responses to receive messages from this client.
@@ -259,21 +261,26 @@ pub struct MsgClient<T> {
     // addr is the socket address which client will connect to.
     // phantom is just used to avoid compile error.
     connect_addr: SocketAddr,
+    name: String,
     phantom: PhantomData<T>,
 }
 
 impl<T> MsgClient<T>
     where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone
 {
-    pub fn new(addr: &str) -> MsgClient<T> {
+    pub fn new(addr: &str, client_name: &'static str) -> MsgClient<T> {
         let socket_addr = addr.parse::<SocketAddr>().unwrap();
         MsgClient {
             connect_addr: socket_addr,
+            name: String::from(client_name),
             phantom: PhantomData,
         }
     }
 
-    pub fn start_client(&self, client_name: &'static str, process_function: fn(T) -> Vec<T>) {
+    pub fn start_client<F>(&self, mut process_function: F)
+        where F: FnMut(T) -> Vec<T> + Send + Sync + 'static
+    {
+        let client_name = self.name.clone();
         let tcp = net::TcpStream::connect(&self.connect_addr);
         let done = tcp.map(move |mut tcp_stream| {
             let mut message_codec: MessageCodec<T> = MessageCodec::new(client_name);
@@ -287,8 +294,7 @@ impl<T> MsgClient<T>
             // Create a mpsc::channel in order to build a bridge between sender task and receiver
             // task.
             let (mut tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
-            let rx = rx.map_err(|_| panic!());
-            let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx);
+            let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx.map_err(|_| panic!()));
             let (sink, stream) = message_codec.framed(tcp_stream).split();
 
             // Spawn a sender task.
@@ -309,6 +315,7 @@ impl<T> MsgClient<T>
                     None => {
                         let msg = msg.unwrap();
                         let msgs = process_function(msg);
+                        //let msgs = process_function(msg);
                         for msg in msgs {
                             tx.try_send(Some(msg)).unwrap();
                         }

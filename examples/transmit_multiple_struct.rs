@@ -45,8 +45,8 @@ fn main() {
 }
 
 fn server() {
-    let server: MsgServer<Message> = MsgServer::new("127.0.0.1:6666");
-    fn process(msg: Message) -> Vec<(String, Message)> {
+    let server: MsgServer<Message> = MsgServer::new("127.0.0.1:6666", "server");
+    server.start_server(Message::VecOfF32msg(VecOfF32 { vec: vec![] }), |msg: Message| {
         println!("{:?}", msg);
         match msg {
             Message::VecOfF32msg(vec_of_32) => {
@@ -60,23 +60,26 @@ fn server() {
                 std::process::exit(0)
             }
         }
-    }
-    server.start_server("server", Message::VecOfF32msg(VecOfF32{vec:vec![]}), process);
+    });
 }
 
 fn client() {
-    let client: MsgClient<Message> = MsgClient::new("127.0.0.1:6666");
-    fn process(msg: Message) -> Vec<Message> {
+    let client: MsgClient<Message> = MsgClient::new("127.0.0.1:6666", "client");
+    // x is used to test whether the closure can change the outer mutable variable
+    let mut x: u32 = 0;
+    client.start_client(move |msg: Message| {
         println!("{:?}", msg);
         match msg {
             Message::VecOfF32msg(mut vec_of_32) => {
+                x += 1;
                 vec_of_32.vec.push(1);
                 vec![Message::VecOfF32msg(vec_of_32)]
             }
             Message::Endmsg(_) => {
+                println!("Outer count is {:?}", x);
                 std::process::exit(0)
             }
         }
-    }
-    client.start_client("client", process);
+    });
 }
+
