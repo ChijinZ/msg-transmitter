@@ -1,7 +1,5 @@
 # msg-transmitter
 [![Build Status](https://travis-ci.org/ChijinZ/msg-transmitter.svg?branch=master)](https://travis-ci.org/ChijinZ/msg-transmitter)
-
-
 [![Crates.io](https://img.shields.io/crates/v/msg-transmitter.svg)](https://crates.io/crates/msg-transmitter)
 
 ## Overview
@@ -13,6 +11,12 @@ The crate is based on TCP, so it can support both Windows and Linux.
 - User data are transfered to bytes by serialization framework [serde](https://github.com/serde-rs/serde) and binary encoder/decoder crate [bincode](https://github.com/TyOverby/bincode).
 
 ## Usage
+To use `msg-transmitter`, first add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+msg-transmitter = "0.1"
+```
 
 ## example
 A basic u32-transmitting example:
