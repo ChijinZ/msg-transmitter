@@ -3,6 +3,8 @@ name = "msg-transmitter"
 version = "0.1.0"
 authors = ["ChijinZ <tlock.chijin@gmail.com>"]
 exclude = [".idea/*"]
+description = "A tcp-based, single-server-multiple-clients model with the Rust programming language."
+license = "MIT"
 
 [[example]]
 name = "simple_connection"
