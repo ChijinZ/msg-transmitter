@@ -26,16 +26,16 @@ fn main() {
 }
 
 fn server() {
-    let server: MsgServer<u32> = MsgServer::new("127.0.0.1:6666");
+    let server: MsgServer<u32> = MsgServer::new("127.0.0.1:6666","server");
     fn process(msg: u32) -> Vec<(String, u32)> {
         println!("{}", msg);
         vec![("client".to_string(), msg + 1)]
     }
-    server.start_server("server", 0, process);
+    server.start_server(0, process);
 }
 
 fn client() {
-    let client: MsgClient<u32> = MsgClient::new("127.0.0.1:6666");
+    let client: MsgClient<u32> = MsgClient::new("127.0.0.1:6666","client");
     fn process(msg: u32) -> Vec<(u32)> {
         println!("{}", msg);
         if msg < 20 {
@@ -44,5 +44,5 @@ fn client() {
             std::process::exit(0);
         }
     }
-    client.start_client("client", process);
+    client.start_client(process);
 }
