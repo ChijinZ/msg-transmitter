@@ -13,7 +13,8 @@
 
 
 extern crate msg_transmitter;
-use msg_transmitter::{MsgServer,MsgClient};
+
+use msg_transmitter::{MsgServer, MsgClient};
 use std::env;
 
 fn main() {
@@ -26,23 +27,21 @@ fn main() {
 }
 
 fn server() {
-    let server: MsgServer<u32> = MsgServer::new("127.0.0.1:6666","server");
-    fn process(msg: u32) -> Vec<(String, u32)> {
+    let server: MsgServer<u32> = MsgServer::new("127.0.0.1:6666", "server");
+    server.start_server(0, |msg: u32| {
         println!("{}", msg);
         vec![("client".to_string(), msg + 1)]
-    }
-    server.start_server(0, process);
+    });
 }
 
 fn client() {
-    let client: MsgClient<u32> = MsgClient::new("127.0.0.1:6666","client");
-    fn process(msg: u32) -> Vec<(u32)> {
+    let client: MsgClient<u32> = MsgClient::new("127.0.0.1:6666", "client");
+    client.start_client(|msg: u32| {
         println!("{}", msg);
         if msg < 20 {
             vec![msg + 1]
         } else {
             std::process::exit(0);
         }
-    }
-    client.start_client(process);
+    });
 }
