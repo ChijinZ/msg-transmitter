@@ -29,9 +29,7 @@
 //! simple protocol.
 //!
 //!    +++++++++++++++++++++++++++++++++++++++++++++++
-//!
 //!     Data_size(4 bytes) | State(1 byte) |   Data
-//!
 //!    +++++++++++++++++++++++++++++++++++++++++++++++
 //!
 //! Data_size is a 4-bytes head to represent the number of bytes of **state** and **Data**. So each
