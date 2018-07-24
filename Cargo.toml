@@ -2,6 +2,7 @@
 name = "msg-transmitter"
 version = "0.1.0"
 authors = ["ChijinZ <tlock.chijin@gmail.com>"]
+exclude = [".idea/*"]
 
 [[example]]
 name = "simple_connection"
