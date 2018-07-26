@@ -17,7 +17,7 @@ extern crate msg_transmitter;
 extern crate serde_derive;
 extern crate bincode;
 
-use msg_transmitter::{MsgServer, MsgClient};
+use msg_transmitter::*;
 
 use std::env;
 
@@ -45,7 +45,7 @@ fn main() {
 }
 
 fn server() {
-    let server: MsgServer<Message> = MsgServer::new("127.0.0.1:6666", "server");
+    let server: TCPMsgServer<Message> = TCPMsgServer::new("127.0.0.1:6666", "server");
     server.start_server(Message::VecOfF32msg(VecOfF32 { vec: vec![] }), |msg: Message| {
         println!("{:?}", msg);
         match msg {
@@ -64,7 +64,7 @@ fn server() {
 }
 
 fn client() {
-    let client: MsgClient<Message> = MsgClient::new("127.0.0.1:6666", "client");
+    let client: TCPMsgClient<Message> = TCPMsgClient::new("127.0.0.1:6666", "client");
     // x is used to test whether the closure can change the outer mutable variable
     let mut x: u32 = 0;
     client.start_client(move |msg: Message| {

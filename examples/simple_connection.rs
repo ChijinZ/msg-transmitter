@@ -14,7 +14,7 @@
 
 extern crate msg_transmitter;
 
-use msg_transmitter::{MsgServer, MsgClient};
+use msg_transmitter::*;
 use std::env;
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
 }
 
 fn server() {
-    let server: MsgServer<u32> = MsgServer::new("127.0.0.1:6666", "server");
+    let server: TCPMsgServer<u32> = TCPMsgServer::new("127.0.0.1:6666", "server");
     server.start_server(0, |msg: u32| {
         println!("{}", msg);
         vec![("client".to_string(), msg + 1)]
@@ -35,7 +35,7 @@ fn server() {
 }
 
 fn client() {
-    let client: MsgClient<u32> = MsgClient::new("127.0.0.1:6666", "client");
+    let client: TCPMsgClient<u32> = TCPMsgClient::new("127.0.0.1:6666", "client");
     client.start_client(|msg: u32| {
         println!("{}", msg);
         if msg < 20 {
