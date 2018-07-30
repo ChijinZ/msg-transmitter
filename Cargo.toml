@@ -1,6 +1,6 @@
 [package]
 name = "msg-transmitter"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["ChijinZ <tlock.chijin@gmail.com>"]
 exclude = [".idea/*"]
 description = "A tcp-based, single-server-multiple-clients model with the Rust programming language."
