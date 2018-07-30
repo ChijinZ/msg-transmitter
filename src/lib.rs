@@ -148,10 +148,10 @@ impl<T> Decoder for MessageCodec<T> where T: serde::de::DeserializeOwned {
 }
 
 #[allow(dead_code)]
-mod tcp;
+pub mod tcp;
 
 #[allow(dead_code)]
-mod uds;
+pub mod uds;
 
 pub fn create_tcp_server<T>(addr: &str, server_name: &str) -> tcp::TCPMsgServer<T>
     where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone

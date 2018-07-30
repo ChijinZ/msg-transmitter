@@ -16,7 +16,7 @@ To use `msg-transmitter`, first add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-msg-transmitter = "0.1"
+msg-transmitter = "0.2"
 ```
 
 ## Example

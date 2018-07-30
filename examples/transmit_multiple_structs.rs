@@ -5,11 +5,11 @@
 //!
 //! You can test this out by running:
 //!
-//!     cargo run --example transmit_multiple_struct server
+//!     cargo run --example transmit_multiple_structs server
 //!
 //! And then in another window run:
 //!
-//!     cargo run --example transmit_multiple_struct client
+//!     cargo run --example transmit_multiple_structs client
 //!
 
 extern crate msg_transmitter;
