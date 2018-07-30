@@ -11,12 +11,8 @@ name = "simple_connection"
 path = "examples/simple_connection.rs"
 
 [[example]]
-name = "transmit_multiple_struct"
-path = "examples/transmit_multiple_struct.rs"
-
-[[example]]
-name = "test_future"
-path = "examples/test_future.rs"
+name = "transmit_multiple_structs"
+path = "examples/transmit_multiple_structs.rs"
 
 [dependencies]
 tokio = "0.1"

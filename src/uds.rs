@@ -18,9 +18,9 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-use super::codec::*;
+use super::MessageCodec;
 use std::path::Path;
-use self::tokio_uds::{UnixStream,UnixListener};
+use self::tokio_uds::{UnixStream, UnixListener};
 
 #[derive(Debug)]
 pub struct UDSMsgServer<T> {
@@ -41,8 +41,9 @@ impl<T> UDSMsgServer<T>
             connections: Arc::new(Mutex::new(HashMap::new())),
         }
     }
+
     pub fn start_server(&self, first_msg: T,
-                        process_function: fn(T) -> Vec<(String, T)>)
+                    process_function: fn(T) -> Vec<(String, T)>)
     {
         let path = Path::new(&self.path_name);
         let connections_outer = self.connections.clone();
@@ -129,6 +130,7 @@ impl<T> UDSMsgClient<T>
             phantom: PhantomData,
         }
     }
+
     pub fn start_client<F>(&self, mut process_function: F)
         where F: FnMut(T) -> Vec<T> + Send + Sync + 'static
     {

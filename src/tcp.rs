@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::marker::PhantomData;
 
-use super::codec::*;
+use super::MessageCodec;
 
 #[derive(Debug)]
 pub struct TCPMsgServer<T> {
@@ -41,8 +41,9 @@ impl<T> TCPMsgServer<T>
             connections: Arc::new(Mutex::new(HashMap::new())),
         }
     }
+
     pub fn start_server(&self, first_msg: T,
-                        process_function: fn(T) -> Vec<(String, T)>)
+                    process_function: fn(T) -> Vec<(String, T)>)
     {
         let connections_outer = self.connections.clone();
         let listener = net::TcpListener::bind(&self.addr)
@@ -130,9 +131,9 @@ impl<T> TCPMsgClient<T>
         }
     }
 
-    pub fn start_client<F, U>(&self, mut process_function: F, future: U)
-        where F: FnMut(T) -> Vec<T> + Send + Sync + 'static,
-              U: Future<Item=T, Error=io::Error> + Send + Sync + 'static
+
+    pub fn start_client<F>(&self, mut process_function: F)
+        where F: FnMut(T) -> Vec<T> + Send + Sync + 'static
     {
         let client_name = self.name.clone();
         let tcp = net::TcpStream::connect(&self.connect_addr);
@@ -140,7 +141,6 @@ impl<T> TCPMsgClient<T>
         // Create a mpsc::channel in order to build a bridge between sender task and receiver
         // task.
         let (mut tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
-        let mut user_tx = tx.clone();
         let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx.map_err(|_| panic!()));
 
         let done = tcp.map(move |mut tcp_stream| {
@@ -182,13 +182,6 @@ impl<T> TCPMsgClient<T>
                 Ok(())
             }).map_err(move |_| { println!("server closed"); });
             tokio::spawn(receive_and_process);
-
-            let user_future = future.and_then(move |val| {
-                user_tx.try_send(Some(val)).unwrap();
-                Ok(())
-            }).map_err(|_| { println!("user's future error"); });
-            tokio::spawn(user_future);
-
         }).map_err(|e| { println!("{:?}", e); });
         tokio::run(done);
     }
