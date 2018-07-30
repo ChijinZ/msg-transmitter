@@ -11,8 +11,8 @@ name = "simple_connection"
 path = "examples/simple_connection.rs"
 
 [[example]]
-name = "transmit_multiple_struct"
-path = "examples/transmit_multiple_struct.rs"
+name = "transmit_multiple_structs"
+path = "examples/transmit_multiple_structs.rs"
 
 [dependencies]
 tokio = "0.1"
@@ -22,3 +22,4 @@ serde = "1.0"
 serde_derive = "1.0"
 bincode = "1.0"
 tokio-codec = "0.1.0"
+tokio-uds = "0.2.0"

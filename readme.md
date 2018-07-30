@@ -6,7 +6,7 @@
 ## Overview
 It is a library of single server multiple clients model. The main purpose of this library is helping users more focus on communication logic instead of low-level networking design. User can transmit any structs between server and client.
 
-The crate is based on TCP, so it can support both Windows and Linux.
+User is able to choose either tcp-based or uds-based connection. Note that tcp-based connection can support both Windows and *nux, but uds-based connection only can support *nux.
 ## Dependances
 - Main networking architecture impletmented by asynchronous framework [tokio](https://github.com/tokio-rs/tokio) and [futures](https://github.com/rust-lang-nursery/futures-rs).
 - User data are transfered to bytes by serialization framework [serde](https://github.com/serde-rs/serde) and binary encoder/decoder crate [bincode](https://github.com/TyOverby/bincode).
@@ -24,7 +24,7 @@ A basic u32-transmitting example:
 ```rust
 extern crate msg_transmitter;
 
-use msg_transmitter::{MsgServer, MsgClient};
+use msg_transmitter::*;
 use std::env;
 
 fn main() {
@@ -37,7 +37,7 @@ fn main() {
 }
 
 fn server() {
-    let server: MsgServer<u32> = MsgServer::new("127.0.0.1:6666", "server");
+    let server = create_tcp_server("127.0.0.1:6666", "server");
     server.start_server(0, |msg: u32| {
         println!("{}", msg);
         vec![("client".to_string(), msg + 1)]
@@ -45,7 +45,7 @@ fn server() {
 }
 
 fn client() {
-    let client: MsgClient<u32> = MsgClient::new("127.0.0.1:6666", "client");
+    let client = create_tcp_client("127.0.0.1:6666", "client");
     client.start_client(|msg: u32| {
         println!("{}", msg);
         if msg < 20 {
