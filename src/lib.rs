@@ -158,12 +158,12 @@ fn start_server<T, F, U>(incoming: U, first_msg: T,
                          process_function: F,
                          server_name: String,
                          connections_outer: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>)
-                         -> Box<Future<Item=(), Error=()>>
+                         -> Box<Future<Item=(), Error=()> + Send + 'static>
     where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone,
           F: FnMut(String, T) -> Vec<(String, T)> + Send + Sync + 'static + Clone,
           U: Stream + Send + Sync + 'static,
           <U as futures::Stream>::Item: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync,
-          <U as futures::Stream>::Error: std::fmt::Debug + 'static
+          <U as futures::Stream>::Error: std::fmt::Debug + 'static + Send + Sync
 {
     Box::new(
         incoming
@@ -237,12 +237,12 @@ fn start_server<T, F, U>(incoming: U, first_msg: T,
 fn start_client<T, F, U>(connect: U,
                          client_name: String,
                          mut process_function: F)
-                         -> Box<Future<Item=(), Error=()>>
+                         -> Box<Future<Item=(), Error=()> + Send + 'static>
     where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone,
           F: FnMut(T) -> Vec<T> + Send + Sync + 'static,
           U: Future + Send + Sync + 'static,
           <U as futures::Future>::Item: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync,
-          <U as futures::Future>::Error: std::fmt::Debug + 'static
+          <U as futures::Future>::Error: std::fmt::Debug + 'static + Send + Sync
 {
     // Create a mpsc::channel in order to build a bridge between sender task and receiver
     // task.

@@ -12,7 +12,7 @@ User is able to choose either tcp-based or uds-based connection. Note that tcp-b
 - User data are transfered to bytes by serialization framework [serde](https://github.com/serde-rs/serde) and binary encoder/decoder crate [bincode](https://github.com/TyOverby/bincode).
 
 ## Usage
-To use `msg-transmitter`, first add this to your `Cargo.toml`:
+To use `msg-transmitter`, add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -22,6 +22,7 @@ msg-transmitter = "0.2"
 ## Example
 A basic u32-transmitting example:
 ```rust
+extern crate tokio;
 extern crate msg_transmitter;
 
 use msg_transmitter::*;
@@ -38,15 +39,16 @@ fn main() {
 
 fn server() {
     let server = create_tcp_server("127.0.0.1:6666", "server");
-    server.start_server(0, |msg: u32| {
-        println!("{}", msg);
+    let server_task = server.start_server(0, |client_name, msg| {
+        println!("{}: {}", client_name, msg);
         vec![("client".to_string(), msg + 1)]
     });
+    tokio::run(server_task);
 }
 
 fn client() {
     let client = create_tcp_client("127.0.0.1:6666", "client");
-    client.start_client(|msg: u32| {
+    let client_task = client.start_client(|msg: u32| {
         println!("{}", msg);
         if msg < 20 {
             vec![msg + 1]
@@ -54,6 +56,7 @@ fn client() {
             std::process::exit(0);
         }
     });
+    tokio::run(client_task);
 }
 ```
 More examples can be found [here](https://github.com/ChijinZ/msg-transmitter/tree/master/examples).

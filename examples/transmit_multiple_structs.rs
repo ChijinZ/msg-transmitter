@@ -16,6 +16,7 @@ extern crate msg_transmitter;
 #[macro_use]
 extern crate serde_derive;
 extern crate bincode;
+extern crate tokio;
 
 use msg_transmitter::*;
 
@@ -46,8 +47,8 @@ fn main() {
 
 fn server() {
     let server = create_tcp_server("127.0.0.1:6666", "server");
-    server.start_server(Message::VecOfF32msg(VecOfF32 { vec: vec![] }), |msg: Message| {
-        println!("{:?}", msg);
+    let server_task = server.start_server(Message::VecOfF32msg(VecOfF32 { vec: vec![] }), |client_name: String, msg: Message| {
+        println!("{}: {:?}", client_name, msg);
         match msg {
             Message::VecOfF32msg(vec_of_32) => {
                 if vec_of_32.vec.len() < 10 {
@@ -61,13 +62,14 @@ fn server() {
             }
         }
     });
+    tokio::run(server_task);
 }
 
 fn client() {
     let client = create_tcp_client("127.0.0.1:6666", "client");
     // x is used to test whether the closure can change the outer mutable variable
     let mut x: u32 = 0;
-    client.start_client(move |msg: Message| {
+    let client_task = client.start_client(move |msg: Message| {
         println!("{:?}", msg);
         match msg {
             Message::VecOfF32msg(mut vec_of_32) => {
@@ -81,5 +83,6 @@ fn client() {
             }
         }
     });
+    tokio::run(client_task);
 }
 

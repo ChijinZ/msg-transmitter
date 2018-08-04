@@ -11,7 +11,7 @@
 //! If it works, client should receive even number and server should receive odd number until client
 //! receives 20.
 
-
+extern crate tokio;
 extern crate msg_transmitter;
 
 use msg_transmitter::*;
@@ -28,15 +28,16 @@ fn main() {
 
 fn server() {
     let server = create_tcp_server("127.0.0.1:6666", "server");
-    server.start_server(0, |msg: u32| {
-        println!("{}", msg);
+    let server_task = server.start_server(0, |client_name, msg| {
+        println!("{}: {}", client_name, msg);
         vec![("client".to_string(), msg + 1)]
     });
+    tokio::run(server_task);
 }
 
 fn client() {
     let client = create_tcp_client("127.0.0.1:6666", "client");
-    client.start_client(|msg: u32| {
+    let client_task = client.start_client(|msg: u32| {
         println!("{}", msg);
         if msg < 20 {
             vec![msg + 1]
@@ -44,4 +45,5 @@ fn client() {
             std::process::exit(0);
         }
     });
+    tokio::run(client_task);
 }

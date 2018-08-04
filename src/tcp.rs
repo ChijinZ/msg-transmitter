@@ -39,7 +39,7 @@ impl<T> TCPMsgServer<T>
     /// to which client.
     pub fn start_server<F>(&self, first_msg: T,
                            process_function: F)
-                           -> Box<Future<Item=(), Error=()>>
+                           -> Box<Future<Item=(), Error=()> + Send + 'static>
         where F: FnMut(String, T) -> Vec<(String, T)> + Send + Sync + 'static + Clone
     {
         let listener = net::TcpListener::bind(&self.addr)
@@ -78,7 +78,7 @@ impl<T> TCPMsgClient<T>
 
     /// process_function receive a message from server and send a series
     /// of messages to server
-    pub fn start_client<F>(&self, process_function: F) -> Box<Future<Item=(), Error=()>>
+    pub fn start_client<F>(&self, process_function: F) -> Box<Future<Item=(), Error=()> + Send + 'static>
         where F: FnMut(T) -> Vec<T> + Send + Sync + 'static
     {
         start_client(net::TcpStream::connect(&self.connect_addr),
