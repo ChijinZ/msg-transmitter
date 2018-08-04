@@ -24,7 +24,7 @@
 //!
 //! This crate is created by ChijinZ(tlock.chijin@gmail.com).
 
-#![deny(warnings, missing_debug_implementations)]
+//#![deny(warnings, missing_debug_implementations)]
 
 
 extern crate tokio;
@@ -34,12 +34,16 @@ extern crate serde;
 extern crate bincode;
 extern crate bytes;
 
-
+use tokio::net;
+use tokio::prelude::*;
 use bincode::{deserialize, serialize};
 use tokio::io;
 use tokio_codec::*;
 use bytes::{BufMut, BytesMut};
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use futures::sync::mpsc;
 
 // The number of bytes to represent data size.
 const DATA_SIZE: usize = 4;
@@ -47,7 +51,7 @@ const DATA_SIZE: usize = 4;
 // This struct is to build a tokio framed to encode messages to bytes and decode bytes to messages.
 // 'T' represents user-defined message type.
 #[derive(Debug)]
-pub struct MessageCodec<T> {
+struct MessageCodec<T> {
     name: String,
     phantom: PhantomData<T>,
 }
@@ -145,6 +149,148 @@ impl<T> Decoder for MessageCodec<T> where T: serde::de::DeserializeOwned {
             }
         }
     }
+}
+
+//T is user message type
+//F is the closure of control logic
+//U is to abstract tcp and uds
+fn start_server<T, F, U>(incoming: U, first_msg: T,
+                         process_function: F,
+                         server_name: String,
+                         connections_outer: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>)
+                         -> Box<Future<Item=(), Error=()>>
+    where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone,
+          F: FnMut(String, T) -> Vec<(String, T)> + Send + Sync + 'static + Clone,
+          U: Stream + Send + Sync + 'static,
+          <U as futures::Stream>::Item: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync,
+          <U as futures::Stream>::Error: std::fmt::Debug + 'static
+{
+    Box::new(
+        incoming
+            .for_each(move |stream| {
+                let process_function_outer = process_function.clone();
+                let server_name = server_name.clone();
+                let first_msg_inner = first_msg.clone();
+                let connections = connections_outer.clone();
+
+                // Create a mpsc::channel in order to build a bridge between sender task and receiver
+                // task.
+                let (tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
+                let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx.map_err(|_| panic!()));
+
+                // Split tcp_stream to sink and stream. Sink responses to send messages to this
+                // client, stream responses to receive messages from this client.
+                let (sink, stream) = MessageCodec::new(server_name).framed(stream).split();
+
+                // Spawn a sender task.
+                let send_to_client = rx.forward(sink).then(|result| {
+                    if let Err(e) = result {
+                        panic!("failed to write to socket: {}", e)
+                    }
+                    Ok(())
+                });
+                tokio::spawn(send_to_client);
+
+                // To record the client_name
+                let mut client_name = String::new();
+
+                // Spawn a receiver task.
+                let receive_and_process = stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
+                    let connections_inner = connections.clone();
+                    match name {
+                        // If it is a register information, register to connections.
+                        Some(register_name) => {
+                            client_name = register_name.clone();
+                            let mut tx_inner = tx.clone();
+                            tx_inner.try_send(Some(first_msg_inner.clone())).unwrap();
+                            connections_inner.lock().unwrap().insert(register_name, tx_inner);
+                        }
+                        // If it is a user's message, process it.
+                        None => {
+                            let msg = msg.unwrap();
+                            let mut process_function_inner = process_function_outer.clone();
+                            let dest_and_msg = process_function_inner(client_name.clone(), msg);
+                            for (dest, msg) in dest_and_msg {
+                                if connections_inner.lock().unwrap().contains_key(&dest) {
+                                    connections_inner.lock().unwrap().get_mut(&dest).unwrap()
+                                        .try_send(Some(msg)).unwrap();
+                                } else {
+                                    println!("{} doesn't register", dest);
+                                }
+                            }
+                        }
+                    }
+                    Ok(())
+                }).map_err(move |_| {
+                    println!("closed connection");
+                });
+
+                tokio::spawn(receive_and_process);
+                Ok(())
+            }).map_err(|e| { println!("{:?}", e); })
+    )
+}
+
+//T is user message type
+//F is the closure of control logic
+//U is to abstract tcp and uds
+fn start_client<T, F, U>(connect: U,
+                         client_name: String,
+                         mut process_function: F)
+                         -> Box<Future<Item=(), Error=()>>
+    where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone,
+          F: FnMut(T) -> Vec<T> + Send + Sync + 'static,
+          U: Future + Send + Sync + 'static,
+          <U as futures::Future>::Item: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync,
+          <U as futures::Future>::Error: std::fmt::Debug + 'static
+{
+    // Create a mpsc::channel in order to build a bridge between sender task and receiver
+    // task.
+    let (mut tx, rx): (mpsc::Sender<Option<T>>, mpsc::Receiver<Option<T>>) = mpsc::channel(0);
+    let rx: Box<Stream<Item=Option<T>, Error=io::Error> + Send> = Box::new(rx.map_err(|_| panic!()));
+
+    Box::new(
+        connect.and_then(move |mut tcp_stream| {
+            let mut message_codec: MessageCodec<T> = MessageCodec::new(client_name);
+
+            // Send register information to server.
+            let register_msg = None;
+            let mut buf = BytesMut::new();
+            let _ = message_codec.encode(register_msg, &mut buf);
+            let _ = tcp_stream.write_all(&buf);
+
+
+            let (sink, stream) = message_codec.framed(tcp_stream).split();
+
+            // Spawn a sender task.
+            let send_to_server = rx.forward(sink).then(|result| {
+                if let Err(e) = result {
+                    panic!("failed to write to socket: {}", e)
+                }
+                Ok(())
+            });
+            tokio::spawn(send_to_server);
+
+            // Spawn a receiver task.
+            let receive_and_process = stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
+                match name {
+                    Some(_) => {
+                        panic!("client received unexpected message");
+                    }
+                    None => {
+                        let msg = msg.unwrap();
+                        let msgs = process_function(msg);
+                        for msg in msgs {
+                            tx.try_send(Some(msg)).unwrap();
+                        }
+                    }
+                }
+                Ok(())
+            }).map_err(move |_| { println!("server closed"); });
+            tokio::spawn(receive_and_process);
+            Ok(())
+        }).map_err(|e| { println!("{:?}", e); })
+    )
 }
 
 #[allow(dead_code)]
