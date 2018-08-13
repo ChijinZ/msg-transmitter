@@ -18,7 +18,7 @@
 //!
 //!     cargo run --example master_and_slave  manager
 //!
-//!     cargo run --example master_and_slave  manager
+//!     cargo run --example master_and_slave  slave
 //!
 
 extern crate msg_transmitter;
