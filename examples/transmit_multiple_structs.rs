@@ -52,9 +52,9 @@ fn server() {
         match msg {
             Message::VecOfF32msg(vec_of_32) => {
                 if vec_of_32.vec.len() < 10 {
-                    vec![("client".to_string(), Message::VecOfF32msg(vec_of_32))]
+                    vec![(client_name, Message::VecOfF32msg(vec_of_32))]
                 } else {
-                    vec![("client".to_string(), Message::Endmsg(End))]
+                    vec![(client_name, Message::Endmsg(End))]
                 }
             }
             Message::Endmsg(_) => {

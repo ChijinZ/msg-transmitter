@@ -14,6 +14,10 @@ path = "examples/simple_connection.rs"
 name = "transmit_multiple_structs"
 path = "examples/transmit_multiple_structs.rs"
 
+[[example]]
+name = "master_and_slave"
+path = "examples/master_and_slave.rs"
+
 [dependencies]
 tokio = "0.1"
 bytes = "0.4"

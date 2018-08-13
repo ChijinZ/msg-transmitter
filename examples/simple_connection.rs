@@ -30,7 +30,7 @@ fn server() {
     let server = create_tcp_server("127.0.0.1:6666", "server");
     let server_task = server.start_server(0, |client_name, msg| {
         println!("{}: {}", client_name, msg);
-        vec![("client".to_string(), msg + 1)]
+        vec![(client_name, msg + 1)]
     });
     tokio::run(server_task);
 }

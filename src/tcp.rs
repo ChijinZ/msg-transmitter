@@ -13,9 +13,9 @@ use super::*;
 pub struct TCPMsgServer<T> {
     // addr is the socket address which server will bind and listen to.
     // connetions is used to map client's name to sender of channel.
-    addr: SocketAddr,
-    name: String,
-    connections: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>,
+    pub addr: SocketAddr,
+    pub name: String,
+    pub connections: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>,
 }
 
 impl<T> TCPMsgServer<T>

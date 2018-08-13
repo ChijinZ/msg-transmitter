@@ -14,9 +14,9 @@ use self::tokio_uds::{UnixStream, UnixListener};
 pub struct UDSMsgServer<T> {
     // path is the Path bounded by UnixListener.
     // connetions is used to map client's name to sender of channel.
-    path_name: String,
-    name: String,
-    connections: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>,
+    pub path_name: String,
+    pub name: String,
+    pub connections: Arc<Mutex<HashMap<String, mpsc::Sender<Option<T>>>>>,
 }
 
 impl<T> UDSMsgServer<T>
