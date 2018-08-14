@@ -14,7 +14,7 @@
 //!
 //!     cargo run --example master_and_slave  master
 //!
-//! And then fastly (within 10s) in another two window run:
+//! And then fastly (within 10s) in another two windows run:
 //!
 //!     cargo run --example master_and_slave  manager
 //!

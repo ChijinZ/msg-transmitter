@@ -1,6 +1,7 @@
 # msg-transmitter
 [![Build Status](https://travis-ci.org/ChijinZ/msg-transmitter.svg?branch=master)](https://travis-ci.org/ChijinZ/msg-transmitter)
 [![Crates.io](https://img.shields.io/crates/v/msg-transmitter.svg)](https://crates.io/crates/msg-transmitter)
+[![Documentation](https://docs.rs/msg-transmitter/badge.svg)](https://docs.rs/msg-transmitter)
 
 [API Document](https://docs.rs/msg-transmitter/0.3.1/msg_transmitter/)
 ## Overview
