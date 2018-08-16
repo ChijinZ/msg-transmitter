@@ -211,11 +211,16 @@ fn start_server<T, F, U>(incoming: U, first_msg: T,
                             let mut process_function_inner = process_function_outer.clone();
                             let dest_and_msg = process_function_inner(client_name.clone(), msg);
                             for (dest, msg) in dest_and_msg {
-                                if connections_inner.lock().unwrap().contains_key(&dest) {
-                                    connections_inner.lock().unwrap().get_mut(&dest).unwrap()
-                                        .try_send(Some(msg)).unwrap();
+                                if dest == "" {
+                                    let mut tx_inner = tx.clone();
+                                    tx_inner.try_send(Some(msg)).unwrap();
                                 } else {
-                                    println!("{} doesn't register", dest);
+                                    if connections_inner.lock().unwrap().contains_key(&dest) {
+                                        connections_inner.lock().unwrap().get_mut(&dest).unwrap()
+                                            .try_send(Some(msg)).unwrap();
+                                    } else {
+                                        println!("{} doesn't register", dest);
+                                    }
                                 }
                             }
                         }
