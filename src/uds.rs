@@ -23,6 +23,7 @@ impl<T> UDSMsgServer<T>
     where T: serde::de::DeserializeOwned + serde::Serialize + Send + 'static + Clone
 {
     /// *addr* is socket address. like: 127.0.0.1:6666.
+    ///
     /// *name* is the server's name, to identity which server it is.
     pub fn new(path_name: &str, server_name: &str) -> UDSMsgServer<T> {
         UDSMsgServer {
@@ -34,6 +35,7 @@ impl<T> UDSMsgServer<T>
 
     /// *first_msg* is the first message that server send to the client which just
     /// connect to server.
+    ///
     /// *process_fuction* receive a tuple of <client_name, message>, and return
     /// a series of tuple of (client_name,message) indicating which message will be
     /// sent to which client. Note that if you want to send a message to current

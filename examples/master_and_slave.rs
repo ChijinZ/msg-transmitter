@@ -57,7 +57,6 @@ fn master() {
         println!("master receive {:?} from {}", msg, client_name);
         println!("sleep");
         let ten_millis = time::Duration::from_millis(10000);
-        let now = time::Instant::now();
         thread::sleep(ten_millis);
         println!("awake");
         vec![(client_name, Message::Stop())]
