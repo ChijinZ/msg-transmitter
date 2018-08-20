@@ -1,4 +1,5 @@
 //! # msg-transmitter
+//!
 //! ## Overview
 //! It is a library of single server multiple clients model. The main purpose of this library
 //! is helping users more focus on communication logic instead of low-level networking design.
@@ -23,7 +24,7 @@
 //! Design can be found [here](https://github.com/ChijinZ/msg-transmitter/blob/dev/readme.md)
 //!
 //! This crate is created by ChijinZ(tlock.chijin@gmail.com).
-
+// #![feature(nll)]
 //#![deny(warnings, missing_debug_implementations)]
 
 
@@ -41,7 +42,8 @@ use tokio::io;
 use tokio_codec::*;
 use bytes::{BufMut, BytesMut};
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use futures::sync::mpsc;
 
@@ -171,7 +173,6 @@ fn start_server<T, F, U>(incoming: U, first_msg: T,
                 let process_function_outer = process_function.clone();
                 let server_name = server_name.clone();
                 let first_msg_inner = first_msg.clone();
-                let connections = connections_outer.clone();
 
                 // Create a mpsc::channel in order to build a bridge between sender task and receiver
                 // task.
@@ -185,52 +186,62 @@ fn start_server<T, F, U>(incoming: U, first_msg: T,
                 // Spawn a sender task.
                 let send_to_client = rx.forward(sink).then(|result| {
                     if let Err(e) = result {
-                        panic!("failed to write to socket: {}", e)
+                        println!("failed to write to socket: {}", e)
                     }
                     Ok(())
                 });
-                tokio::spawn(send_to_client);
+                //tokio::spawn(send_to_client);
 
                 // To record the client_name
-                let mut client_name = String::new();
-
+                let client_name = Arc::new(RwLock::new(String::new()));
+                // let client_name_ref = &mut client_name;
                 // Spawn a receiver task.
-                let receive_and_process = stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
-                    let connections_inner = connections.clone();
-                    match name {
-                        // If it is a register information, register to connections.
-                        Some(register_name) => {
-                            client_name = register_name.clone();
-                            let mut tx_inner = tx.clone();
-                            tx_inner.try_send(Some(first_msg_inner.clone())).unwrap();
-                            connections_inner.lock().unwrap().insert(register_name, tx_inner);
-                        }
-                        // If it is a user's message, process it.
-                        None => {
-                            let msg = msg.unwrap();
-                            let mut process_function_inner = process_function_outer.clone();
-                            let dest_and_msg = process_function_inner(client_name.clone(), msg);
-                            for (dest, msg) in dest_and_msg {
-                                if dest == "" {
+                let receive_and_process =
+                    {
+                        let connections = connections_outer.clone();
+                        let mut client_name = client_name.clone();
+                        stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
+                            let connections_inner = connections.clone();
+                            match name {
+                                // If it is a register information, register to connections.
+                                Some(register_name) => {
+                                    client_name.write().unwrap().push_str(&register_name);
                                     let mut tx_inner = tx.clone();
-                                    tx_inner.try_send(Some(msg)).unwrap();
-                                } else {
-                                    if connections_inner.lock().unwrap().contains_key(&dest) {
-                                        connections_inner.lock().unwrap().get_mut(&dest).unwrap()
-                                            .try_send(Some(msg)).unwrap();
-                                    } else {
-                                        println!("{} doesn't register", dest);
+                                    tx_inner.try_send(Some(first_msg_inner.clone())).unwrap();
+                                    connections_inner.lock().unwrap().insert(register_name, tx_inner);
+                                }
+                                // If it is a user's message, process it.
+                                None => {
+                                    let msg = msg.unwrap();
+                                    let mut process_function_inner = process_function_outer.clone();
+                                    let dest_and_msg = process_function_inner(client_name.read().unwrap().to_string(), msg);
+                                    for (dest, msg) in dest_and_msg {
+                                        if dest == "" {
+                                            let mut tx_inner = tx.clone();
+                                            tx_inner.try_send(Some(msg)).unwrap();
+                                        } else {
+                                            if connections_inner.lock().unwrap().contains_key(&dest) {
+                                                connections_inner.lock().unwrap().get_mut(&dest).unwrap()
+                                                    .try_send(Some(msg)).unwrap();
+                                            } else {
+                                                println!("{} doesn't register", dest);
+                                            }
+                                        }
                                     }
                                 }
                             }
-                        }
-                    }
-                    Ok(())
-                }).map_err(move |_| {
-                    println!("closed connection");
-                });
-
-                tokio::spawn(receive_and_process);
+                            Ok(())
+                        })
+                    };
+                let connections = connections_outer.clone();
+                tokio::spawn(
+                    send_to_client.select(receive_and_process)
+                        .and_then(move |_| {
+                            println!("{} disconnect",*client_name.read().unwrap());
+                            connections.lock().unwrap().remove(&*client_name.read().unwrap());
+                            Ok(())
+                        }).map_err(|_| {})
+                );
                 Ok(())
             }).map_err(|e| { println!("{:?}", e); })
     )
@@ -259,9 +270,8 @@ fn start_client<T, F, U>(connect: U,
             let mut message_codec: MessageCodec<T> = MessageCodec::new(client_name);
 
             // Send register information to server.
-            let register_msg = None;
             let mut buf = BytesMut::new();
-            let _ = message_codec.encode(register_msg, &mut buf);
+            let _ = message_codec.encode(None, &mut buf);
             let _ = tcp_stream.write_all(&buf);
 
 
@@ -270,17 +280,17 @@ fn start_client<T, F, U>(connect: U,
             // Spawn a sender task.
             let send_to_server = rx.forward(sink).then(|result| {
                 if let Err(e) = result {
-                    panic!("failed to write to socket: {}", e)
+                    println!("failed to write to socket: {}", e)
                 }
                 Ok(())
             });
-            tokio::spawn(send_to_server);
+            // tokio::spawn(send_to_server);
 
             // Spawn a receiver task.
             let receive_and_process = stream.for_each(move |(name, msg): (Option<String>, Option<T>)| {
                 match name {
                     Some(_) => {
-                        panic!("client received unexpected message");
+                        println!("client received unexpected message");
                     }
                     None => {
                         let msg = msg.unwrap();
@@ -291,10 +301,16 @@ fn start_client<T, F, U>(connect: U,
                     }
                 }
                 Ok(())
-            }).map_err(move |_| { println!("server closed"); });
-            tokio::spawn(receive_and_process);
+            });
+            tokio::spawn(
+                send_to_server.select(receive_and_process)
+                    .and_then(|_| {
+                        println!("server closed");
+                        Ok(())
+                    }).map_err(|_| {})
+            );
             Ok(())
-        }).map_err(|e| { println!("{:?}", e); })
+        }).map_err(|e| { println!("faild to connect. err:{:?}", e); })
     )
 }
 

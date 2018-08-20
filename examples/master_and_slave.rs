@@ -67,7 +67,7 @@ fn master() {
 fn manager() {
     use futures::sync::mpsc;
     use std::sync::{Arc, Mutex};
-    let future_task = future::ok(1).and_then(|_| {
+    let future_task = future::lazy(|| {
         let srv = create_tcp_server("127.0.0.1:6666", "management_server");
         let clt = create_tcp_client("127.0.0.1:7777", "management_client");
         let connections = srv.connections.clone();
@@ -79,7 +79,7 @@ fn manager() {
                     for (_, tx) in connections.lock().unwrap().iter_mut() {
                         (*tx).try_send(Some(0)).unwrap();
                     }
-                    std::process::exit(0);
+                    //std::process::exit(0);
                 }
                 _ =>{}
             }
